@@ -1,11 +1,8 @@
 -------------------------------------------------------------------
---Quick Start Guide for Upgrad Cricket Challenge
+--Quick Start Guide for Data Science Codes
 -------------------------------------------------------------------
 
-1. Extract the Upgrad_Cricket_Challenge.zip
-2. Place all the datasets in the same folder as extracted.
-3. Run the python notebook from the same location.
-4. Run the Sports Analytics Hackathon.ipynb file in Jupyter Notebook.
-5. Execute the Commands Line by Line to view the data and visualizations that follow.
-6. The Dataset is extracted from http://stats.espncricinfo.com manually for each dataset.
-7. Upgrad Cricket Challenge.pdf is provided for further references and conlusion about the Dataset
+1. Attached are the Codes in Python for various Data Science Problems and Case Study for Upgrad.
+2. The Problem Statement is wriiten in a Word format.
+3. The .ipynb files correspond to the Python Notebook file which contains the Code for the Problem.
+4. Additional PPT's and PDF's are attached for reference.
