@@ -1,0 +1,328 @@
+﻿-- Taxi Dataset Data Ingestion and Processing - Assignment
+-- Shailesh Kumar
+
+
+-- Adding JAR command
+ADD JAR /opt/cloudera/parcels/CDH/lib/hive/lib/hive-hcatalog-core-1.1.0-cdh5.11.2.jar;
+
+-- Set Maximum Partitions
+SET hive.exec.max.dynamic.partitions=100000;
+SET hive.exec.max.dynamic.partitions.pernode=100000;
+
+-- Create External Table from the dataset provided 
+CREATE EXTERNAL TABLE IF NOT EXISTS NYC_TLC_TAXI_DATA_SHAILESH(
+VendorID INT,
+tpep_pickup_datetime TIMESTAMP,
+tpep_dropoff_datetime TIMESTAMP,
+passenger_count INT,
+trip_distance DOUBLE, 
+RatecodeID INT,
+store_and_fwd_flag STRING,
+PULocationID INT,
+DOLocationID INT, 
+payment_type INT,
+fare_amount DOUBLE,
+extra DOUBLE,
+mta_tax DOUBLE,
+tip_amount DOUBLE,
+tolls_amount DOUBLE,
+improvement_surcharge DOUBLE,  
+total_amount DOUBLE) ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+with serdeproperties  ('paths' = '')
+location '/common_folder/nyc_taxi_data/'
+tblproperties ("skip.header.line.count"="1");
+
+-- Check the new table 
+select * from NYC_TLC_TAXI_DATA_SHAILESH limit 10;
+
+-- Verify Counts
+select count(*) from NYC_TLC_TAXI_DATA_SHAILESH;
+--Record Count - 1174569
+
+--How many records has each TPEP provider provided? Write a query that summarises the number of records of each provider.
+select VendorID, count(*) as Total_Trip_Per_Vendor from NYC_TLC_TAXI_DATA_SHAILESH
+group by VendorID;
+--Results 
+--Vendor 1 -> 527386
+--Vendor 2 -> 647183
+
+-- The data provided is for months November and December only. Check whether the data is consistent, and if not, identify the data quality issues. 
+-- Mention all data quality issues in comments.
+
+-- Checking if there are any records other than 2017 year 
+select * from NYC_TLC_TAXI_DATA_SHAILESH where YEAR(tpep_pickup_datetime) <> 2017;
+-- Result - There are 8 records which is not 2017 year and all the records are from Vendor 2 (2009, 2008, 2003 and 2018 year's record)
+
+-- Checking for errors data in Passenger count column 
+select count(*) from NYC_TLC_TAXI_DATA_SHAILESH where passenger_count = 0;
+-- Result - There are 	6824 rows where passenger count is 0.
+
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where passenger_count = 0 Group by VendorID;
+-- Result - Vendor 1 - 6813 and Vendor 2 - 11 where passenger count is 0
+
+--Distance of Trip with 0 miles
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where trip_distance = 0 Group by VendorID;
+-- Result Vendor 1 - 4217 and Vendor 2 - 3185
+
+-- RATE CODE ID Column Not in the range 1-6
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where RatecodeID NOT IN (1,2,3,4,5,6) Group by VendorID;
+-- Result Vendor 1:8 and Vendor 2:1 
+
+-- Store_And_Fwd_Flag Column
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where store_and_fwd_flag NOT IN ('Y', 'N') Group by VendorID;
+
+-- Checking if PULocationID and DOLocationID are same
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where PULocationID = DOLocationID Group by VendorID;
+-- Assuming Pick up and Drop are the same
+
+-- Checking if DOLocationID is 0
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where PULocationID = 0 Group by VendorID;
+-- Result 0 records
+
+-- Checking if PULocationID is 0
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where PULocationID = 0 Group by VendorID;
+-- Result 0 records
+
+-- Payment Type Not in the range 1-6
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where payment_type NOT IN (1,2,3,4,5,6) Group by VendorID;
+-- Result 0 records
+
+-- Check if Fare Amount is 0  
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where fare_amount = 0 Group by VendorID;
+-- Result : Vendor1 = 231 and Vendor2 = 81
+
+-- Check if Fare Amount is Negative  
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where fare_amount < 0 Group by VendorID;
+-- Result Vendor 1 - 0 and Vendor 2 - 558
+
+-- Checking if Extra is not in ($0.5 and $1) 
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where extra < 0  Group by VendorID;
+-- Result Vendor 1 - 1 and Vendor 2 - 285
+
+-- MTA_TAX
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where mta_tax < 0  Group by VendorID;
+-- Result Vendor1 = 0 and Vendor2 = 544
+
+-- Check TIP Amount charged for Payments other than Credit card tips
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where tip_amount > 0 and payment_type = 2  Group by VendorID;
+-- Result 0 records
+
+-- Check negative Tip Amount
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where tip_amount < 0  Group by VendorID;
+-- Result Vendor 1 - 0 and Vendor 2 = 4
+
+-- Check negative Tolls_Amount
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where tolls_amount < 0  Group by VendorID;
+-- Results Vendor 1 - 0 and Vendor 2 - 3
+
+-- Check Improvement_Surcharge not equal to 0.3
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where improvement_surcharge != 0.3 Group by VendorID;
+-- Results Vendor1 = 61 and Vendor2 = 788
+
+-- Check Negative values for Total_Amount
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where total_amount < 0  Group by VendorID;
+-- Results Vendor1 = 0 and Vendor2 = 558
+
+-- Check Zero value for Total_Amount
+select VendorID, count(*) AS Count_Of_Records from NYC_TLC_TAXI_DATA_SHAILESH where total_amount = 0  Group by VendorID;
+-- Results Vendor1 = 42 and Vendor2 = 81
+
+-- SUMMARY OF ERRORS FOUND
+-- ************************
+-- There are 8 records for which Trip start date is not 2017.
+-- There are passenger Count is 0 (Vendor1 = 6813, Vendor2 = 11)
+-- Rate code ID which is not in range (1,2,3,4,5,6) (Vendor1 = 8, Vendor2 = 1)
+-- Fare Amount 0 (Vendor1 = 231, Vendor2 = 81)
+-- Fare Amount Negative (Vendor1 = 0, Vendor2 = 558)
+-- Negative Extra Charge (Vendor1 = 1, Vendor2 = 285)
+-- Negative MTA_TAX (Vendor1 = 0, Vendor2 = 544)
+-- Negative Tip Amount (Vendor1 = 0, Vendor2 = 4)
+-- Negative Toll Amount (Vendor1 = 0, Vendor2 = 3)
+-- Improvement_Surcharge not equal to 0.3 (Vendor1 = 61, Vendor2 = 788)
+-- Total Amount Negative (Vendor1 = 0, Vendor2 = 558)
+-- Total Amount 0 (Vendor1 = 42, Vendor2 = 81)
+-- Vendor 1 has given more error records
+
+-- CREATING EXTERNAL ORC PARTITIONED TABLE
+create external table if not exists NYC_TLC_TAXI_DATA_SHAILESH_PARTITION_ORC
+(
+VendorID INT,
+tpep_pickup_datetime TIMESTAMP,
+tpep_dropoff_datetime TIMESTAMP,
+passenger_count INT,
+trip_distance DOUBLE, 
+RatecodeID INT,
+store_and_fwd_flag STRING,
+PULocationID INT,
+DOLocationID INT, 
+payment_type INT,
+fare_amount DOUBLE,
+extra DOUBLE,
+mta_tax DOUBLE,
+tip_amount DOUBLE,
+tolls_amount DOUBLE,
+improvement_surcharge DOUBLE,  
+total_amount DOUBLE
+) partitioned by (yr int, mnth int)
+stored as orc location '/user/hive/warehouse/SHAILESH_PARTITION_ORC'
+tblproperties ("orc.compress"="SNAPPY");
+
+
+--INSERT VALUES INTO NEWLY CREATED ORC TABLE
+INSERT INTO table NYC_TLC_TAXI_DATA_SHAILESH_PARTITION_ORC partition (yr, mnth)
+SELECT VendorID, tpep_pickup_datetime, tpep_dropoff_datetime, passenger_count, trip_distance, RatecodeID, store_and_fwd_flag, PULocationID,
+DOLocationID, payment_type, fare_amount, extra, mta_tax, tip_amount, tolls_amount, improvement_surcharge, total_amount, 
+YEAR(tpep_pickup_datetime) as yr, MONTH(tpep_pickup_datetime) as mnth
+FROM NYC_TLC_TAXI_DATA_SHAILESH
+WHERE 
+passenger_count > 0 AND
+trip_distance > 0.0 AND
+RatecodeID IN (1,2,3,4,5,6) AND 
+fare_amount > 0 AND 
+extra >= 0 AND
+mta_tax >= 0 AND 
+tip_amount >=0 AND
+tolls_amount >=0 AND
+improvement_surcharge =0.3 AND
+total_amount > 0 AND
+YEAR(tpep_pickup_datetime) = 2017 AND
+MONTH(tpep_pickup_datetime) IN (11,12);
+
+-- Total count of cleaned records
+SELECT COUNT(*) FROM NYC_TLC_TAXI_DATA_SHAILESH_PARTITION_ORC;
+-- Results - 1159746
+
+-- Total Count of cleaned records seggregated based on Vendors
+select VendorID, count(*) as Total_Trip_Per_Vendor from NYC_TLC_TAXI_DATA_SHAILESH_PARTITION_ORC
+group by VendorID;
+--Results  Vendor1 = 516302 and Vendor2 = 643444
+
+-- Verifying data of ORC partitioned table
+SELECT * FROM NYC_TLC_TAXI_DATA_SHAILESH_PARTITION_ORC LIMIT 20;
+
+--Analysis 1
+
+-- Compare the overall average fare per trip for November and December.
+SELECT MONTH(tpep_pickup_datetime) AS MONTH_IN_NUMBERS, AVG(fare_amount)
+FROM NYC_TLC_TAXI_DATA_SHAILESH_PARTITION_ORC
+GROUP BY MONTH(tpep_pickup_datetime);
+-- RESULT 
+-- For Novemebr Avg Fare Amount is $13.06 and 
+-- December Avg Fare Amount is $12.85
+
+-- Explore the ‘number of passengers per trip’ - how many trips are made by each level of ‘Passenger_count’? 
+-- Do most people travel solo or with other people?
+SELECT passenger_count AS Number_Of_Passengers, count(*) 
+FROM NYC_TLC_TAXI_DATA_SHAILESH_PARTITION_ORC
+GROUP BY passenger_count;
+-- Results for how many trips are made by each level of ‘Passenger_count’
+-- 1 passenger trips  - 821262
+-- 2 Passengers trips - 175841
+-- 3 Passengers trips - 50452
+-- 4 Passengers trips - 24809
+-- 5 Passengers trips - 54342
+-- 6 Passengers trips - 33037
+-- 7 Passengers trips - 3
+-- Do most people travel solo or with other people? YES,  as we see a count of 821262 which tops the list
+
+
+-- Which is the most preferred mode of payment?
+SELECT payment_type, count(*) 
+FROM NYC_TLC_TAXI_DATA_SHAILESH_PARTITION_ORC
+GROUP BY payment_type;
+-- Results 
+-- Payment Type 1 - Credit Card - 782803
+-- Payment Type 2 - Cash        - 370832
+-- Payment Type 3 - No Charge   - 4783
+-- Payment Type 4 - Dispute     - 1328
+-- From the above results it is cear that Credit Card is the most preferred Payment Type
+
+
+-- What is the average tip paid per trip? Compare the average tip with the 25th, 50th and 75th percentiles and comment 
+-- whether the ‘average tip’ is a representative statistic (of the central tendency) of ‘tip amount paid’.
+
+-- ASSUMPTION - CONSIDERING ONLY CREDIT CARD PAYMENT TYPE
+
+select AVG(tip_amount) FROM NYC_TLC_TAXI_DATA_SHAILESH_PARTITION_ORC WHERE payment_type = 1;
+-- Result - AVG Tip paid per trip is $2.73 
+
+select percentile_approx(tip_amount, 0.25) AS 25TH_PERCENTILE, 
+percentile_approx(tip_amount, 0.50) AS 50TH_PERCENTILE, 
+percentile_approx(tip_amount, 0.75) AS 75TH_PERCENTILE FROM NYC_TLC_TAXI_DATA_SHAILESH_PARTITION_ORC
+WHERE payment_type = 1;
+-- RESULTS 
+-- 25TH PERCENTILE - 1.34
+-- 50TH PERCENTILE - 2
+-- 75TH PERCENTILE - 3.05
+-- whether the ‘average tip’ is a representative statistic (of the central tendency) of ‘tip amount paid’ 
+-- ANSWER - NO. 
+
+
+
+--Explore the ‘Extra’ (charge) variable - what fraction of total trips have an extra charge is levied?
+
+SELECT B.WITH_EXTRA_CHARGE/ A.No_EXTRA_CHARGE FROM 
+(Select count(*) as No_EXTRA_CHARGE from NYC_TLC_TAXI_DATA_SHAILESH_PARTITION_ORC where extra = 0) AS A,
+(Select count(*) AS WITH_EXTRA_CHARGE from NYC_TLC_TAXI_DATA_SHAILESH_PARTITION_ORC where extra > 0) AS B;
+-- Result Almost 86% of the trip have been extra charged which is (43/50)
+
+
+-- Analysis-II
+-- What is the correlation between the number of passengers on any given trip, and the tip paid per trip? 
+-- Do multiple travellers tip more compared to solo travellers?
+
+select CORR(passenger_count, tip_amount) from NYC_TLC_TAXI_DATA_SHAILESH_PARTITION_ORC WHERE PAYMENT_TYPE = 1;
+-- ASSUMPTION - CONSIDERING ONLY CREDIT CARD PAYMENT TYPE
+-- Correlation between Number of passengers and Tip amount - (0.0072) 
+-- Do multiple travellers tip more compared to solo travellers? NO, We are seeeing a very negligable positive Correlation of 0.0072.
+
+
+--Segregate the data into five segments of ‘tip paid’: [0-5), [5-10), [10-15) , [15-20) and >=20. 
+--Calculate the percentage share of each bucket (i.e. the fraction of trips falling in each bucket).
+select tip_Bucket, count(*) as No_Of_Records, MAX(RECORDS_COUNT) AS TOTAL_NUM_OF_REC,
+ROUND(COUNT(*)/MAX(RECORDS_COUNT), 5) AS TIP_BUCKET_OVERALL
+FROM (SELECT temptbl.*, count(*)over () RECORDS_COUNT, 
+CASE WHEN tip_amount >=0 and tip_amount< 5 then '0_to_5'
+WHEN tip_amount >=5 and tip_amount< 10 then '5_to_10' 
+WHEN tip_amount >=10 and tip_amount< 15 then '10_to_15'
+WHEN tip_amount >=15 and tip_amount< 20 then '15_to_20' 
+else '20Above'
+end as tip_Bucket
+from NYC_TLC_TAXI_DATA_SHAILESH_PARTITION_ORC temptbl)as sub_tbl
+group by tip_Bucket
+order by TIP_BUCKET_OVERALL desc;
+
+-- RESULTS
+-- [0,5] BUCKET CONSTITUTES  - 92.17%
+-- [5,10] BUCKET CONSTITUTES - 5.6%
+-- [10,15] BUCKET CONSTITUTES - 1.8%
+-- [15,20] BUCKET CONSTITUTES - 0.23%
+-- 20 AND ABOVE BUCKET CONSTITUTES - 0.09%
+
+-- Which month has a greater average ‘speed’ - November or December? 
+select Month(tpep_pickup_datetime), AVG(trip_distance/((UNIX_TIMESTAMP(tpep_dropoff_datetime) - UNIX_TIMESTAMP(tpep_pickup_datetime))/3600)) as Avg_Speed 
+from NYC_TLC_TAXI_DATA_SHAILESH_PARTITION_ORC
+Group by Month(tpep_pickup_datetime);
+-- NOVEMBER AVG SPEED - 10.99, 
+-- DECEMBER AVG SPEED - 11.09
+-- DECEMBER HAS GREATER AVG SPEED
+
+
+--Analyse the average speed of the most happening days of the year, i.e. 31st December (New year’s eve) and 25th December (Christmas) and compare it with the overall average. 
+
+SELECT ROUND(AVG(CASE WHEN MNTH=12 AND DAY(tpep_pickup_datetime) = 25 THEN (trip_distance/((UNIX_TIMESTAMP(tpep_dropoff_datetime) - UNIX_TIMESTAMP(tpep_pickup_datetime))/3600)) ELSE NULL END),3) AS Christmas_Avg_Speed,
+ROUND(AVG(CASE WHEN MNTH=12 AND DAY(tpep_pickup_datetime) = 31 THEN (trip_distance/((UNIX_TIMESTAMP(tpep_dropoff_datetime) - UNIX_TIMESTAMP(tpep_pickup_datetime))/3600)) ELSE NULL END),3) AS NewYear_Avg_Speed,
+ROUND(AVG(CASE WHEN MNTH in (11,12) THEN (trip_distance/((UNIX_TIMESTAMP(tpep_dropoff_datetime) - UNIX_TIMESTAMP(tpep_pickup_datetime))/3600)) ELSE NULL END),3) AS Overall_Avg_Speed,
+(ROUND(AVG(CASE WHEN MNTH=12 AND DAY(tpep_pickup_datetime) = 25 THEN (trip_distance/((UNIX_TIMESTAMP(tpep_dropoff_datetime) - UNIX_TIMESTAMP(tpep_pickup_datetime))/3600)) ELSE NULL END),3) - 
+ROUND(AVG(CASE WHEN MNTH in (11,12) THEN (trip_distance/((UNIX_TIMESTAMP(tpep_dropoff_datetime) - UNIX_TIMESTAMP(tpep_pickup_datetime))/3600)) ELSE NULL END),3)) As Difference_In_Christmas_And_Overall_Avg_Speed,
+(ROUND(AVG(CASE WHEN MNTH=12 AND DAY(tpep_pickup_datetime) = 31 THEN (trip_distance/((UNIX_TIMESTAMP(tpep_dropoff_datetime) - UNIX_TIMESTAMP(tpep_pickup_datetime))/3600)) ELSE NULL END),3) - 
+ROUND(AVG(CASE WHEN MNTH in (11,12) THEN (trip_distance/((UNIX_TIMESTAMP(tpep_dropoff_datetime) - UNIX_TIMESTAMP(tpep_pickup_datetime))/3600)) ELSE NULL END),3)) As Difference_In_Newyear_And_Overall_Avg_Speed
+from NYC_TLC_TAXI_DATA_SHAILESH_PARTITION_ORC;
+
+-- Christmas Time Avg Speed - 15.265
+-- New Year Time Avg Speed  - 13.244
+-- Overall Avg Speed        - 11.047
+-- Difference between Christmas and Overal Avg speed  -  4.218
+-- Difference between Newyear and Overal Avg speed  -    2.196
+
+
